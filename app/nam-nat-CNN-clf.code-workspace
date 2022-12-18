@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../BREADCRUMBS/job-title-clf-CNN-local"
+		}
+	],
+	"settings": {
+		"python.analysis.extraPaths": ["app"]
+	}
+}
