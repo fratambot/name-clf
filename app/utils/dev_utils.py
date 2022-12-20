@@ -1,11 +1,13 @@
 # Here we have all utility functions for development
 import pandas as pd
 
+
 # I/O
 def load_raw_data(filepath):
     df = pd.read_csv(filepath)
     print("csv loaded into dataframe of shape: ", df.shape)
     return df
+
 
 def drop_duplicates(df, subset):
     if len(subset) > 0:
@@ -17,7 +19,7 @@ def drop_duplicates(df, subset):
             )
             df.drop_duplicates(subset, inplace=True)
         else:
-            print("No duplicates found")
+            print(f"No duplicates found in df[{subset}]")
     else:
         duplicates = df[df.duplicated(keep=False)]
         if len(duplicates) > 0:
@@ -27,10 +29,11 @@ def drop_duplicates(df, subset):
             )
             df.drop_duplicates(inplace=True)
         else:
-            print("No duplicates found")
+            print(f"No duplicates found in in df[{subset}]")
     # assert there are no duplicates
     assert len(df[df.duplicated(keep=False)]) == 0
     return df
+
 
 # plots
 def model_performance_plot(history_or_cm):
