@@ -54,9 +54,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    some_arg_for_tuning_like_max_epochs = (
-        args.some_arg_for_tuning_like_max_epochs
-    )
+    some_arg_for_tuning_like_max_epochs = args.some_arg_for_tuning_like_max_epochs
     data_tag = args.data_tag
 
     main()

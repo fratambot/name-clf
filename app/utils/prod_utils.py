@@ -11,5 +11,6 @@ def remove_digits_punctuation_doublespaces(inp):
     no_double_spaces = re.sub(" +", " ", no_punct)
     return no_double_spaces.strip()
 
+
 def unidecode_string(funny_string):
     return unidecode.unidecode(funny_string)

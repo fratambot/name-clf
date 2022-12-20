@@ -4,6 +4,7 @@
 # uvicorn main:app --reload
 
 from fastapi import FastAPI
+
 # local import
 from src.predict import predictor
 
