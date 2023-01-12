@@ -2,17 +2,25 @@ import argparse
 import math
 import numpy as np
 import os
+import pandas as pd
 import pickle
-from dataclasses import dataclass
+import pycountry
+import sys
 
+# import wandb
+
+from dataclasses import dataclass
+from names_dataset import NameDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# local imports
-import sys
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # we use /app folder as base_path
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -20,82 +28,120 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # cannot import from modules at the same level
 sys.path.insert(0, base_path)
 
-from utils.dev_utils import load_raw_data, drop_duplicates  # noqa: E402
-from utils.prod_utils import remove_digits_punctuation_doublespaces  # noqa: E402
+# local imports
+# from utils.dev_utils import load_raw_data, drop_duplicates  # noqa: E402
+# from utils.prod_utils import remove_digits_punctuation_doublespaces  # noqa: E402
 
 
-def data_preparation_pipeline(validation_size_gender, validation_size_nationality):
-
-    filepath = os.path.join(base_path, "data", "names-by-nationality.csv")
-    print("raw_data_filepath = ", filepath)
-    try:
-        data = load_raw_data(filepath)
-        data.rename(columns={"sex": "gender"}, inplace=True)
-    except OSError as error:
-        print(error)
-        return
-
+def data_preparation_pipeline(tag, build_raw_data, train_val_test_size):
+    # wandb.login()
+    # PROJECT_NAME = f"{tag}-clf"
+    if build_raw_data:
+        # run = wandb.init(project=PROJECT_NAME, job_type="upload")
+        data = build_dataframe()
+        # TODO: save to file
+        # raw_data_artifact = wandb.Artifact("raw_data_ES", type="raw_data")
+    else:
+        data = pd.DataFrame()
     # data cleaning / standardization
     data.dropna(inplace=True)
     # lower
-    data["name"] = data["name"].str.lower()
+    data["Name"] = data["Name"].str.lower()
     # remove noise
-    data["name"] = data["name"].apply(
-        lambda x: remove_digits_punctuation_doublespaces(x)
-    )
-    # remove duplicates
-    # TODO: some names can belong to different nationalities, though...
-    data = drop_duplicates(data, ["name"])
-    max_name_lenght = data["name"].str.len().max()
+    # data["Name"] = data["Name"].apply(
+    #     lambda x: remove_digits_punctuation_doublespaces(x)
+    # )
+
+    max_name_lenght = data["Name"].str.len().max()
     assert max_name_lenght > 0
-    # input shape is the smallest multiple of power of 2 larger than max_name_lenght
+    # # input shape is the smallest multiple of power of 2 larger than max_name_lenght
     INPUT_SHAPE = 2 ** (math.ceil(math.log(max_name_lenght, 2)))
     print(f"max name lenght : {max_name_lenght} => INPUT_SHAPE : {INPUT_SHAPE}")
 
-    # Prepare gender datsets for training
-    target = "gender"
-    gender_training_set = get_training_data(
-        target, data, validation_size_gender, INPUT_SHAPE
-    )
-
     # Prepare nationality datsets for training
-    target = "nationality"
-    nationality_training_set = get_training_data(
-        target, data, validation_size_gender, INPUT_SHAPE
+    target = "Country"
+    country_training_set = get_training_data(
+        target, data, train_val_test_size, INPUT_SHAPE
     )
 
-    return gender_training_set, nationality_training_set
+    return country_training_set
 
 
-def get_training_data(target, data, val_size, INPUT_SHAPE):
+def build_dataframe():
+    nd = NameDataset()
+
+    country_codes = nd.get_country_codes(alpha_2=True)
+    country_mapping = {}
+    for country_code in country_codes:
+        country_name = pycountry.countries.get(alpha_2=country_code).name
+        country_mapping[country_code] = country_name
+
+    subset = "ES"  # , "IT", "FR", "DE", "GB")
+    europe = dict(filter(lambda i: i[0] in subset, country_mapping.items()))
+    entries = []
+    for key, value in europe.items():
+        print(key)
+        result_male = nd.get_top_names(n=2000, gender="Male", country_alpha2=key)
+        for name_male in result_male[key]["M"]:
+            entries.append({"Name": name_male, "Country": value, "Gender": "Male"})
+        result_female = nd.get_top_names(n=2000, gender="Female", country_alpha2=key)
+        for name_female in result_female[key]["F"]:
+            entries.append({"Name": name_female, "Country": value, "Gender": "Female"})
+
+    df = pd.DataFrame(entries)
+    print(f"Dataframe loaded: {df.shape}")
+
+    return df
+
+
+def get_training_data(target, data, train_val_test_size, INPUT_SHAPE):
     # Split the data
-    X_train, X_val, y_train, y_val = train_test_split(
-        data["name"],
+
+    split_list = list(map(float, train_val_test_size.split(" ")))
+    assert len(split_list) == 3
+    split_list = np.divide(split_list, 100.0)
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        data["Name"],
         data[target],
-        test_size=val_size,
+        shuffle=True,
+        test_size=split_list[2],
         stratify=data[target],
+    )
+    assert y_trainval.nunique() == y_test.nunique()
+
+    val_size = split_list[1] / (split_list[0] + split_list[1])
+    print("val_size = ", val_size)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_trainval,
+        y_trainval,
+        test_size=val_size,
+        stratify=y_trainval,
     )
     assert y_train.nunique() == y_val.nunique()
     print(f"{target} training examples: ", len(X_train))
     print(f"{target} validation examples: ", len(X_val))
+    print(f"{target} test examples: ", len(X_test))
 
-    # tokenize on gender training data
-    tk = text_vectorization(target, X_train)
-    # convert data to padded sequences
-    X_train, X_val = padded_sequences(X_train, X_val, tk, INPUT_SHAPE)
-    # one-hot encode targets
-    y_train, y_val = ohe_classes(y_train, y_val, target)
-    print(f"↓↓↓ Saving {target} training data as artifact...")
-    np.savez_compressed(
-        os.path.join(base_path, "artifacts/training_data", f"{target}_data.npz"),
-        x_train=X_train,
-        y_train=y_train,
-        x_val=X_val,
-        y_val=y_val,
-    )
-    training_set = TrainingSet(X_train, y_train, X_val, y_val)
+    # print(f"{target} training examples: ", len(X_train))
+    # print(f"{target} test examples: ", len(X_test))
 
-    return training_set
+    # # tokenize on gender training data
+    # tk = text_vectorization(target, X_train)
+    # # convert data to padded sequences
+    # X_train, X_val = padded_sequences(X_train, X_val, tk, INPUT_SHAPE)
+    # # one-hot encode targets
+    # y_train, y_val = ohe_classes(y_train, y_val, target)
+    # print(f"↓↓↓ Saving {target} training data as artifact...")
+    # np.savez_compressed(
+    #     os.path.join(base_path, "artifacts/training_data", f"{target}_data.npz"),
+    #     x_train=X_train,
+    #     y_train=y_train,
+    #     x_val=X_val,
+    #     y_val=y_val,
+    # )
+    # training_set = TrainingSet(X_train, y_train, X_val, y_val)
+
+    return  # training_set
 
 
 def text_vectorization(target, X_train):
@@ -154,20 +200,34 @@ class TrainingSet:
 
 
 if __name__ == "__main__":
+    # python app/pipelines/data_preparation.py --tag="Country" --build_raw_data
     # Parse args
     docstring = """When running this script as main you can specify the filepath for the raw data to be prepared """  # noqa: E501
     parser = argparse.ArgumentParser(
         description=docstring,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-
-    # optional validation size for gender (default: 15%)
-    parser.add_argument("--val_size_gen", nargs="?", default=0.15)
-    # optional validation size for nationality (default: 15%)
-    parser.add_argument("--val_size_nat", nargs="?", default=0.15)
+    parser.add_argument(
+        "--tag",
+        required=True,
+        default="Country",
+        type=str,
+        choices=["Country", "Gender"],
+        help="tag identifying the classifier to tune {'Country' | 'Gender'}",
+    )
+    parser.add_argument("--build_raw_data", action=argparse.BooleanOptionalAction)
+    # optional train / validation / test size (default: 80% 10% 10%)
+    parser.add_argument("--train_val_test_size", nargs="+", default="80 10 10")
     args = parser.parse_args()
-    validation_size_gender = args.val_size_gen
-    validation_size_nationality = args.val_size_nat
-    print("*** Data preparation")
-    data_preparation_pipeline(validation_size_gender, validation_size_nationality)
-    print("*** Finished ***")
+    tag = args.tag
+    build_raw_data = args.build_raw_data
+    train_val_test_size = args.train_val_test_size
+    wandb_key = os.environ.get("WANDB_KEY")
+    if wandb_key is None:
+        print(
+            "ERROR: Weights and Biases integration failed. You need a wandb account to run this script"  # noqa: E501
+        )
+    else:
+        print("*** Data preparation ***")
+        data_preparation_pipeline(tag, build_raw_data, train_val_test_size)
+        print("*** Finished ***")

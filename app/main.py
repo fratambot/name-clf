@@ -6,7 +6,7 @@
 from fastapi import FastAPI
 
 # local import
-from src.predict import predictor
+
 
 app = FastAPI()
 
@@ -32,6 +32,7 @@ def predict(
         # load the model using the model_tag
         loaded_model = None
 
-    prediction = predictor(loaded_model, input)
+    # prediction = predictor(loaded_model, input)
+    prediction = None
 
     return prediction

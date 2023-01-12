@@ -1,0 +1,16 @@
+{
+    "method" : "bayes",
+    "metric" : {
+        "goal" : "minimize", 
+        "name" : "val_loss"
+		},
+    "early_terminate": {
+        "type" : "hyperband",
+        "min_iter" : 3
+    },
+    "parameters" : {
+        "dense_1" : {
+            "values" : [64, 128, 256]
+        }
+     }
+}
