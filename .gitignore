@@ -2,6 +2,7 @@ Icon?
 __pycache__
 .ipynb_checkpoints
 .env
-local_data/
+local_datasets/
 .DS_store
 wandb/
+*.code-workspace
