@@ -1,2 +1,2 @@
-# nam-nat-CNN-clf
-A name-nationality classifier using 1D CNN
+# name classifier
+A country and gender classifier based on first name
