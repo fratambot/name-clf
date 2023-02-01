@@ -1,11 +1,11 @@
+# import json
 import numpy as np
 import os
-
-# import pickle
 import sys
 import tensorflow as tf
 import tensorflow.keras.layers as tfl
-import wandb
+
+# import wandb
 
 # we use /app folder as base_path
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,14 +13,17 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # cannot import from modules at the same level
 sys.path.insert(0, base_path)
 
+# config_filepath = os.path.join(base_path, "config.json")
+# global CONFIG
+# CONFIG = json.load(open(config_filepath))
 
-def CNN_model(input_shape, softmax_units, embedding_size, project_name):
+
+def CNN_LSTM_model(input_shape=16, embedding_size=33, softmax_units=7, dense_1=32):
     print("Hello model")
-    wandb.login()
-    config_defaults = {"dense_1": 64}
-    wandb.init(project=project_name, config=config_defaults)
-    config = wandb.config
-    print(config)
+    # wandb.login()
+    # with wandb.init(project=PROJECT_NAME, job_type="initialize", config=default_config) as run: # noqa: E501
+    #     wb_config = wandb.config
+    #     print(wb_config)
 
     embedding_weigths = np.concatenate(
         (
@@ -46,21 +49,19 @@ def CNN_model(input_shape, softmax_units, embedding_size, project_name):
             filters=16, kernel_size=7, strides=1, activation="relu", padding="valid"
         )
     )
-    model.add(
-        tfl.Conv1D(
-            filters=16, kernel_size=5, strides=1, activation="relu", padding="valid"
-        )
-    )
-    model.add(
-        tfl.Conv1D(
-            filters=16, kernel_size=3, strides=1, activation="relu", padding="valid"
-        )
-    )
-    # model.add(tfl.MaxPooling1D(pool_size=2))
-    # model.add(tfl.Dropout(rate=0.4))
     # model.add(
-    #     tfl.LSTM(8,return_sequences=True)
+    #     tfl.Conv1D(
+    #         filters=16, kernel_size=5, strides=1, activation="relu", padding="valid"
+    #     )
     # )
+    # model.add(
+    #     tfl.Conv1D(
+    #         filters=16, kernel_size=3, strides=1, activation="relu", padding="valid"
+    #     )
+    # )
+    model.add(tfl.MaxPooling1D(pool_size=2))
+    model.add(tfl.Dropout(rate=0.3))
+    model.add(tfl.LSTM(input_shape, return_sequences=True))
     # model.add(tfl.Dropout(rate=0.4))
     # model.add(
     #     tfl.LSTM(8,return_sequences=True)
@@ -68,24 +69,26 @@ def CNN_model(input_shape, softmax_units, embedding_size, project_name):
     model.add(tfl.Flatten())
     model.add(
         tfl.Dense(
-            units=config.dense_1,
+            name="dense_1",
+            units=dense_1,
             activation="relu",
         )
     )
     model.add(
         tfl.Dense(
+            name="dense_2",
             units=128,
             activation="relu",
         )
     )
     # Softmax
-    model.add(tfl.Dense(units=softmax_units, activation="softmax"))
+    model.add(tfl.Dense(name="softmax", units=softmax_units, activation="softmax"))
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.01),
         loss="categorical_crossentropy",
         metrics=[tf.keras.metrics.CategoricalAccuracy()],
     )
 
-    wandb.finish()
+    print(model.summary())
 
     return model

@@ -1,22 +1,10 @@
+import keras_tuner
 import numpy as np
-
-# import os
-# import pickle
 import tensorflow as tf
 import tensorflow.keras.layers as tfl
 
-import keras_tuner
 
-# from sklearn.model_selection import train_test_split
-# from sklearn.preprocessing import OneHotEncoder
-
-# from tensorflow.keras.preprocessing.text import Tokenizer
-# from tensorflow.keras.preprocessing.sequence import pad_sequences
-
-# local import
-
-
-class CNNHyperModel(keras_tuner.HyperModel):
+class CNNLSTMHyperModel(keras_tuner.HyperModel):
     def __init__(self, input_shape, metrics, softmax_units, embedding_size):
         self.input_shape = input_shape
         self.metrics = metrics
@@ -61,30 +49,7 @@ class CNNHyperModel(keras_tuner.HyperModel):
             )
         )
         model.add(tfl.LSTM(8, return_sequences=True))
-        # model.add(tfl.MaxPooling1D(pool_size=2))
 
-        # model.add(
-        #     tfl.Conv1D(filters=16,kernel_size=5,strides=1,activation="relu")
-        # )
-        # model.add(tfl.MaxPooling1D(pool_size=2))
-        # model.add(
-        #     tfl.Conv1D(
-        #         filters=16,
-        #         kernel_size=3,
-        #         strides=1,
-        #         activation="relu",
-        #     )
-        # )
-        # model.add(
-        #     tfl.Conv1D(filters=16, kernel_size=3, strides=1, activation="relu")
-        # )
-        # model.add(
-        #     tfl.Conv1D(filters=16, kernel_size=3, strides=1, activation="relu")
-        # )
-        # model.add(
-        #     tfl.Conv1D(filters=16, kernel_size=3, strides=1, activation="relu")
-        # )
-        # model.add(tfl.MaxPooling1D(pool_size=2))
         model.add(tfl.Flatten())
         # Dense 1 (tune)
         model.add(
@@ -112,18 +77,6 @@ class CNNHyperModel(keras_tuner.HyperModel):
                 activation="relu",
             )
         )
-        # Drop 3 (tune)
-        # model.add(
-        #     tfl.Dropout(
-        #         rate=hp.Float(
-        #             "dropout_3",
-        #             min_value=0.0,
-        #             max_value=0.5,
-        #             default=0.5,
-        #             step=0.1,
-        #         )
-        #     )
-        # )
         # Softmax
         model.add(tfl.Dense(units=self.softmax_units, activation="softmax"))
         # Learning rate (tune)
@@ -146,12 +99,12 @@ def hyperband_tuner(
     # max_tuning_epochs,
     directory,
 ):
-    hypercnn = CNNHyperModel(input_shape, metrics, softmax_units, embedding_size)
+    hypermod = CNNLSTMHyperModel(input_shape, metrics, softmax_units, embedding_size)
 
     tuner = keras_tuner.Hyperband(
-        hypermodel=hypercnn,
+        hypermodel=hypermod,
         objective="val_loss",
-        max_epochs=30,
+        max_epochs=20,
         factor=3,
         hyperband_iterations=1,
         overwrite=True,
@@ -187,39 +140,21 @@ def model(input_shape, metrics, softmax_units, embedding_size):
         )
     )
     model.add(
-        tfl.Conv1D(
-            filters=16, kernel_size=7, strides=1, activation="relu", padding="valid"
-        )
+        tfl.Conv1D(filters=input_shape, kernel_size=7, strides=1, activation="relu")
     )
-    model.add(
-        tfl.Conv1D(
-            filters=16, kernel_size=5, strides=1, activation="relu", padding="valid"
-        )
-    )
-    model.add(
-        tfl.Conv1D(
-            filters=16, kernel_size=3, strides=1, activation="relu", padding="valid"
-        )
-    )
-    # model.add(tfl.MaxPooling1D(pool_size=2))
-    # model.add(tfl.Dropout(rate=0.4))
-    # model.add(
-    #     tfl.LSTM(8,return_sequences=True)
-    # )
-    # model.add(tfl.Dropout(rate=0.4))
-    # model.add(
-    #     tfl.LSTM(8,return_sequences=True)
-    # )
+    model.add(tfl.MaxPooling1D(pool_size=2))
+    model.add(tfl.Dropout(rate=0.3))
+    model.add(tfl.LSTM(input_shape, return_sequences=True))
     model.add(tfl.Flatten())
     model.add(
         tfl.Dense(
-            units=64,
+            units=128,
             activation="relu",
         )
     )
     model.add(
         tfl.Dense(
-            units=128,
+            units=64,
             activation="relu",
         )
     )
